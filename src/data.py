@@ -34,8 +34,12 @@ class SCANTokenizer:
     def encode(self, text):
         return [self.token2id.get(token, 3) for token in text.split()]
 
+    # def decode(self, ids):
+    #     return " ".join(self.id2token.get(i, "unk") for i in ids)
     def decode(self, ids):
-        return " ".join(self.id2token.get(i, "unk") for i in ids)
+        if hasattr(ids, 'tolist'):
+            ids = ids.tolist()
+        return " ".join(self.id2token.get(i, "<unk>") for i in ids)
 
     def __len__(self):
         return len(self.token2id)
@@ -102,7 +106,7 @@ if __name__ == "__main__":
 
     print(f"Vocab size: {len(dm.tokenizer)}")
     print(f"Train size: {len(dm.train_dataset)}")
-    print(f"Test size:  {len(dm.test_dataset)}")
+    print(f"Test size:  {len(dm.test_splits)}")
 
     batch = next(iter(dm.get_train_loader()))
     print(f"Batch shape: {batch['input_ids'].shape}")
