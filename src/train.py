@@ -74,7 +74,7 @@ class Trainer:
             all_preds = []
             all_targets = []
             for batch in test_loader:
-                token_ids = batch["input_ids"]
+                token_ids = batch["input_ids"].to(self.cfg.device)
                 logits = self.model(token_ids)
                 loss = self.compute_loss(logits, token_ids)
                 total_loss.append(loss)
@@ -85,8 +85,14 @@ class Trainer:
 
             all_preds = torch.cat(all_preds)
             all_targets = torch.cat(all_targets)
-            accuracy = (all_preds == all_targets).float().mean()
-            avg_loss = torch.tensor(total_loss).mean()
+
+            # Mask padding tokens
+            pad_id = self.dm.tokenizer.token2id["<pad>"]
+            mask = (all_targets != pad_id)
+            accuracy = (all_preds[mask] == all_targets[mask]).float().mean()
+            avg_loss = torch.stack(total_loss).mean()
+            # accuracy = (all_preds == all_targets).float().mean()
+            # avg_loss = torch.stack(total_loss).mean()
         return accuracy, avg_loss
     
     def log_failure_cases(self) -> None:
@@ -99,7 +105,7 @@ class Trainer:
         for split_name, test_loader in test_loaders.items():
             with open(f"results/failure_cases_{split_name}.txt", "w") as f:
                 for batch in test_loader:
-                    token_ids = batch["input_ids"]
+                    token_ids = batch["input_ids"].to(self.cfg.device)
                     logits = self.model(token_ids)
 
                     preds = torch.argmax(logits[:, :-1, :], dim=-1) # [batch, seq_len-1]
@@ -127,9 +133,9 @@ class Trainer:
                     f"eval_accuracy_{split_name}": accuracy,
                     f"eval_loss_{split_name}": avg_loss,
                 })
-            if epoch % 5 == 0: 
+            if epoch % 5 == 0 or epoch == self.cfg.epochs - 1:  # save every 5 + final
                 torch.save(self.model.state_dict(), f"results/checkpoint_epoch_{epoch}.pt")
-        self.log_failure_cases(self.model, dm)
+        self.log_failure_cases()
         torch.save(self.model.state_dict(), f"results/model_final.pt")
 
 if __name__ == "__main__":
