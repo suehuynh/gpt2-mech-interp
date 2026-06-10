@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pathlib import Path
 from jaxtyping import Float, Int
 from config.config import *
-from data import *
+from src.data import *
 
 import torch
 from torch import Tensor
@@ -12,9 +12,9 @@ import torch.nn as nn
 import einops
 from transformer_lens.utils import gelu_new
 
-config = Config()
-dm = SCANDataModule(config)
-d_vocab = len(dm.tokenizer)
+# config = Config()
+# dm = SCANDataModule(config)
+# d_vocab = len(dm.tokenizer)
 
 # ========= EMBEDDING =========
 
@@ -22,7 +22,7 @@ class Embed(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
-        self.token_embed = nn.Embedding(d_vocab, cfg.d_model) # [batch_size, seq_len, d_model]
+        self.token_embed = nn.Embedding(cfg.d_vocab, cfg.d_model) # [batch_size, seq_len, d_model]
         self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model) # [seq_len, d_model]
     def forward(self, token_ids: Int[Tensor, "batch posn"]) -> Float[Tensor, "batch posn d_model"]:
         seq_len = token_ids.shape[1]
@@ -197,9 +197,9 @@ class Unembed(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.W_U = nn.Parameter(torch.empty((cfg.d_model, d_vocab)))
+        self.W_U = nn.Parameter(torch.empty((cfg.d_model, cfg.d_vocab)))
         nn.init.normal_(self.W_U, std=self.cfg.init_range)
-        self.b_U = nn.Parameter(torch.zeros(d_vocab), requires_grad=True)
+        self.b_U = nn.Parameter(torch.zeros(cfg.d_vocab), requires_grad=True)
     
     def forward(self, normalized_resid_post: Float[Tensor, "batch posn d_model"]) -> Float[Tensor, "batch posn d_vocab"]:
         u = (
@@ -236,7 +236,9 @@ if __name__ == "__main__":
     print("=" * 60)
     print("TESTING TRANSFORMER COMPONENTS")
     print("=" * 60)
-    
+    config = Config()
+    dm = SCANDataModule(config)
+
     # Load a batch
     batch = next(iter(dm.get_train_loader()))
     token_ids = batch["input_ids"].to(config.device)
@@ -283,14 +285,14 @@ if __name__ == "__main__":
     print("\n[6] Testing Unembed...")
     unembed = Unembed(config)
     unembed_out = unembed(ln_out)
-    assert unembed_out.shape == (batch_size, seq_len, d_vocab)
+    assert unembed_out.shape == (batch_size, seq_len, config.d_vocab)
     print(f"Unembed output shape: {unembed_out.shape}")
     
     # Test Full Transformer
     print("\n[7] Testing Full Transformer...")
     model = Transformer(config)
     logits = model(token_ids)
-    assert logits.shape == (batch_size, seq_len, d_vocab)
+    assert logits.shape == (batch_size, seq_len, config.d_vocab)
     print(f"Transformer output shape: {logits.shape}")
     
     # Test gradient flow
