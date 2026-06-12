@@ -114,7 +114,7 @@ from jaxtyping import Float, Int
 from config.config import Config
 from src.data import SCANDataModule
 from src.model import Transformer
-
+import json
 import torch
 from torch import Tensor
 
@@ -233,6 +233,8 @@ class Evaluator:
                 "exact_match": exact_acc,
                 "token_accuracy": token_acc
             }
+        with open("results/eval_metrics.json", "w") as f:
+            json.dump(results, f, indent=2)
         return results
 
 # ========= EXECUTION =========
