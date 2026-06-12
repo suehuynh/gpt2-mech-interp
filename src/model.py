@@ -309,4 +309,6 @@ if __name__ == "__main__":
 
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Parameters: {count_parameters(model):,}")
+    print("\n" + "=" * 60)
+    print(f"Mode Parameters: {count_parameters(model):,}")
+    print("\n" + "=" * 60)
