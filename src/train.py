@@ -1,5 +1,7 @@
 import sys
 import os
+import random
+from dataclasses import replace
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from jaxtyping import Float, Int
@@ -7,15 +9,34 @@ from config.config import *
 from data import *
 from model import Transformer
 
+import numpy as np
 import torch
 from torch import Tensor
 import torch.nn as nn
 import wandb
 
+def set_seed(seed: int) -> None:
+    """Seed python, numpy, and torch (CPU + CUDA) RNGs for reproducible training."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # cudnn.benchmark auto-tunes kernels non-deterministically; without
+    # disabling it, two runs with the same seed can still diverge on GPU.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 class Trainer:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, group: str = None):
         """Initialize trainer with config"""
-        wandb.init(project="gpt2-mech-interp", config=cfg.__dict__)
+        set_seed(cfg.seed)
+        wandb.init(
+            project=cfg.wandb_project,
+            config=cfg.__dict__,
+            name=f"seed_{cfg.seed}",
+            group=group,
+            reinit=True,
+        )
         self.cfg = cfg
         self.model = Transformer(self.cfg)
         self.model = self.model.to(device=self.cfg.device)
@@ -91,37 +112,17 @@ class Trainer:
             mask = (all_targets != pad_id)
             accuracy = (all_preds[mask] == all_targets[mask]).float().mean()
             avg_loss = torch.stack(total_loss).mean()
-            # accuracy = (all_preds == all_targets).float().mean()
-            # avg_loss = torch.stack(total_loss).mean()
         return accuracy, avg_loss
     
-    def log_failure_cases(self) -> None:
-        """
-        Log failure cases to results/ folder
-        Format: input | predicted output | expected output
-        """
-        self.model.eval()
-        test_loaders = self.dm.get_all_test_loaders()
-        for split_name, test_loader in test_loaders.items():
-            with open(f"results/failure_cases_{split_name}.txt", "w") as f:
-                for batch in test_loader:
-                    token_ids = batch["input_ids"].to(self.cfg.device)
-                    logits = self.model(token_ids)
-
-                    preds = torch.argmax(logits[:, :-1, :], dim=-1) # [batch, seq_len-1]
-                    targets = token_ids[:, 1:] # [batch, seq_len-1]
-                    failed_mask = (preds != targets)  # [batch, seq_len-1]
-                    for ex_idx in range(failed_mask.shape[0]):  
-                        if failed_mask[ex_idx].any():  # if this example has failures
-                            input_text = self.dm.tokenizer.decode(token_ids[ex_idx])
-                            pred_text = self.dm.tokenizer.decode(preds[ex_idx])  
-                            target_text = self.dm.tokenizer.decode(targets[ex_idx]) 
-                            
-                            f.write(f"[{split_name}] INPUT: {input_text} | TARGET: {target_text} | PRED: {pred_text}\n")
-
     def train(self) -> None:
         """
         Main training pipeline
+
+        Failure-case logging is intentionally not done here: evaluate.py
+        is the single source of truth for failure cases (it uses actual
+        autoregressive generation, not teacher-forced argmax, so its
+        failure cases match what the model really outputs). Run
+        evaluate.py after training to (re)generate them.
         """
         for epoch in range(self.cfg.epochs):
             epoch_loss = self.train_epoch()
@@ -133,12 +134,18 @@ class Trainer:
                     f"eval_accuracy_{split_name}": accuracy,
                     f"eval_loss_{split_name}": avg_loss,
                 })
-            if epoch % 5 == 0 or epoch == self.cfg.epochs - 1:  # save every 5 + final
-                torch.save(self.model.state_dict(), f"results/checkpoint_epoch_{epoch}.pt")
-        self.log_failure_cases()
-        torch.save(self.model.state_dict(), f"results/model_final.pt")
+            if epoch % 5 == 0 or epoch == self.cfg.epochs - 1:  # save every 5 epochs and the final one
+                torch.save(self.model.state_dict(), f"{self.cfg.results_dir}/checkpoint_epoch_{epoch}_seed{self.cfg.seed}.pt")
+        torch.save(self.model.state_dict(), f"{self.cfg.results_dir}/model_seed{self.cfg.seed}.pt")
+        wandb.finish()
 
 if __name__ == "__main__":
-    config = Config()
-    trainer = Trainer(config)
-    trainer.train()
+    # Each seed gets its own W&B run (closed via wandb.finish() in
+    # train()), sharing `group` so the W&B UI can overlay/aggregate them
+    # as one experiment instead of clumping all seeds into a single run.
+    base_config = Config()
+    group = f"multiseed_{'_'.join(str(s) for s in base_config.seeds)}"
+    for seed in base_config.seeds:
+        config = replace(base_config, seed=seed)
+        trainer = Trainer(config, group=group)
+        trainer.train()
