@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import torch
 @dataclass
 class Config:
@@ -11,9 +11,10 @@ class Config:
     "addprim_jump": ("add_prim_split", "addprim_jump"),
     }
     
-
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    d_vocab: int = 25
+    d_vocab: int = 25 # output from src/data.py
+    seed: int = 42
+    seeds: list = field(default_factory=lambda: [42, 101, 345, 2834, 10101])
 
     # Small Model
     max_seq_len: int = 128 
@@ -22,6 +23,7 @@ class Config:
     d_mlp: int = 512
     n_layers: int = 2
     n_heads: int = 4
+    n_ctx: int = 128
     
     # Large Model
     # max_seq_len: int = 50
@@ -30,11 +32,10 @@ class Config:
     # d_mlp: int = 3072
     # n_layers: int = 12
     # n_heads: int = 12
+    # n_ctx: int = 1024
 
     init_range: float = 0.02
     layer_norm_eps: float = 1e-5
-    # n_ctx: int = 1024
-    n_ctx: int = 128
 
     # Training
     batch_size: int = 32
@@ -44,3 +45,8 @@ class Config:
 
     # Logging
     wandb_project: str = "gpt2-mech-interp"
+
+    # Folders
+    results_dir: str = "results"
+    eval_metrics_dir: str = "results/eval_metrics"
+    failure_cases_dir: str = "results/failure_cases"
