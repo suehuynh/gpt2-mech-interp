@@ -3,6 +3,7 @@ wandb/
 results/checkpoint_*
 results/large_*
 results/model_final_large.pt
+results/06_run/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
