@@ -1,0 +1,14 @@
+{
+  "simple": {
+    "exact_match": 0.29124820659971307,
+    "token_accuracy": 0.8335961086883596
+  },
+  "length": {
+    "exact_match": 0.4278061224489796,
+    "token_accuracy": 0.8615135209713024
+  },
+  "addprim_jump": {
+    "exact_match": 0.3166363872307293,
+    "token_accuracy": 0.8448355923144992
+  }
+}
