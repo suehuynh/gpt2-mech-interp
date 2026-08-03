@@ -14,10 +14,33 @@ config = Config()
 def fetch_scan_split(folder: str, split_name: str, train: bool) -> list[str]:
     prefix = "train" if train else "test"
     url = f"{config.base_url}/{folder}/tasks_{prefix}_{split_name}.txt"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     response.raise_for_status()
 
-    return response.text.strip().split("\n")
+    # A truncated download (network hiccup, proxy cutoff, etc.) would
+    # otherwise silently yield a short split with no error, poisoning
+    # every downstream accuracy/failure-count number computed from it.
+    # Content-Length only describes the on-the-wire (possibly
+    # compressed) size, so this check only applies to uncompressed
+    # responses — for gzip/deflate transfers, requests/urllib3 already
+    # raise on a truncated stream during decompression, so no separate
+    # check is needed there.
+    content_length = response.headers.get("Content-Length")
+    if (
+        content_length is not None
+        and "Content-Encoding" not in response.headers
+        and len(response.content) != int(content_length)
+    ):
+        raise RuntimeError(
+            f"Truncated download for {url}: expected {content_length} bytes, "
+            f"got {len(response.content)}"
+        )
+
+    lines = response.text.strip().split("\n")
+    if not lines or lines == [""]:
+        raise RuntimeError(f"Empty response body for {url}")
+
+    return lines
 
 # ========= TOKENIZE COMMANDS AND ACTIONS =========
 
@@ -34,8 +57,6 @@ class SCANTokenizer:
     def encode(self, text):
         return [self.token2id.get(token, 3) for token in text.split()]
 
-    # def decode(self, ids):
-    #     return " ".join(self.id2token.get(i, "unk") for i in ids)
     def decode(self, ids):
         if hasattr(ids, 'tolist'):
             ids = ids.tolist()
@@ -88,7 +109,7 @@ class SCANDataModule:
     def get_train_loader(self) -> DataLoader:
         return DataLoader(self.train_dataset, batch_size=self.config.batch_size, shuffle=True)
 
-    def get_test_loader(self, split: str = "simple") -> DataLoader:
+    def get_test_loader(self, split: list = "simple") -> DataLoader:
         return DataLoader(self.test_splits[split], batch_size=self.config.batch_size, shuffle=False)
     
     def get_all_test_loaders(self) -> dict[str, DataLoader]:
@@ -106,7 +127,11 @@ if __name__ == "__main__":
 
     print(f"Vocab size: {len(dm.tokenizer)}")
     print(f"Train size: {len(dm.train_dataset)}")
-    print(f"Test size:  {len(dm.test_splits)}")
+
+    test_size = 0
+    for split_key in dm.test_splits:
+        test_size += len(dm.test_splits[split_key])
+    print(f"Test size: {test_size} for {len(dm.test_splits)} splits")
 
     batch = next(iter(dm.get_train_loader()))
     print(f"Batch shape: {batch['input_ids'].shape}")
