@@ -12,10 +12,6 @@ import torch.nn as nn
 import einops
 from transformer_lens.utils import gelu_new
 
-# config = Config()
-# dm = SCANDataModule(config)
-# d_vocab = len(dm.tokenizer)
-
 # ========= EMBEDDING =========
 
 class Embed(nn.Module):
