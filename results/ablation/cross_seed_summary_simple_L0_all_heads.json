@@ -1,0 +1,32 @@
+[
+  {
+    "seed": 42,
+    "baseline_accuracy": 0.0,
+    "ablated_accuracy": 0.0,
+    "delta": 0.0
+  },
+  {
+    "seed": 101,
+    "baseline_accuracy": 0.00033738191632928474,
+    "ablated_accuracy": 0.0,
+    "delta": 0.00033738191632928474
+  },
+  {
+    "seed": 345,
+    "baseline_accuracy": 0.0,
+    "ablated_accuracy": 0.0,
+    "delta": 0.0
+  },
+  {
+    "seed": 2834,
+    "baseline_accuracy": 0.0,
+    "ablated_accuracy": 0.000351000351000351,
+    "delta": -0.000351000351000351
+  },
+  {
+    "seed": 10101,
+    "baseline_accuracy": 0.001029512697323267,
+    "ablated_accuracy": 0.0,
+    "delta": 0.001029512697323267
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "token_acc_mean": 0.6445980128436697,
+    "token_acc_std": 0.06516109249755285
+  },
+  "layers": {
+    "0": {
+      "token_acc_mean": 0.41301172227390365,
+      "token_acc_std": 0.057783272470302065,
+      "exact_match_mean": 0.00337538722670182,
+      "exact_match_std": 0.0016698923548103832
+    },
+    "1": {
+      "token_acc_mean": 0.4513299882525697,
+      "token_acc_std": 0.03514065109747638,
+      "exact_match_mean": 0.01634468251230096,
+      "exact_match_std": 0.00755949018100578
+    }
+  },
+  "n_seeds": 5
+}

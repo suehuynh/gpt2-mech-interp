@@ -1,0 +1,87 @@
+[
+  {
+    "seed": 42,
+    "baseline_token_accuracy": 0.5678757235342536,
+    "n_success_cases": 1613,
+    "layers": {
+      "0": {
+        "patch_success_rate": 0.0011484823625922888,
+        "avg_token_accuracy": 0.2575540393620998,
+        "total_cases": 6095
+      },
+      "1": {
+        "patch_success_rate": 0.0029532403609515995,
+        "avg_token_accuracy": 0.3926875003030764,
+        "total_cases": 6095
+      }
+    }
+  },
+  {
+    "seed": 101,
+    "baseline_token_accuracy": 0.7034023584082678,
+    "n_success_cases": 2439,
+    "layers": {
+      "0": {
+        "patch_success_rate": 0.001329282187618686,
+        "avg_token_accuracy": 0.36808322260034576,
+        "total_cases": 5266
+      },
+      "1": {
+        "patch_success_rate": 0.018420053171287504,
+        "avg_token_accuracy": 0.5033228217649615,
+        "total_cases": 5266
+      }
+    }
+  },
+  {
+    "seed": 345,
+    "baseline_token_accuracy": 0.6022440373495872,
+    "n_success_cases": 1233,
+    "layers": {
+      "0": {
+        "patch_success_rate": 0.001235712079085573,
+        "avg_token_accuracy": 0.3486568271493541,
+        "total_cases": 6474
+      },
+      "1": {
+        "patch_success_rate": 0.0066419524250849555,
+        "avg_token_accuracy": 0.4838698264909112,
+        "total_cases": 6474
+      }
+    }
+  },
+  {
+    "seed": 2834,
+    "baseline_token_accuracy": 0.6701612690621099,
+    "n_success_cases": 2673,
+    "layers": {
+      "0": {
+        "patch_success_rate": 0.0003972983710766786,
+        "avg_token_accuracy": 0.22682660395581733,
+        "total_cases": 5034
+      },
+      "1": {
+        "patch_success_rate": 0.0037743345252284465,
+        "avg_token_accuracy": 0.3951234770302531,
+        "total_cases": 5034
+      }
+    }
+  },
+  {
+    "seed": 10101,
+    "baseline_token_accuracy": 0.6333360615446856,
+    "n_success_cases": 2662,
+    "layers": {
+      "0": {
+        "patch_success_rate": 0.0005947660586835844,
+        "avg_token_accuracy": 0.2572455761022007,
+        "total_cases": 5044
+      },
+      "1": {
+        "patch_success_rate": 0.010111022997620936,
+        "avg_token_accuracy": 0.41854622119371776,
+        "total_cases": 5044
+      }
+    }
+  }
+]
