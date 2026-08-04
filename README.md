@@ -130,7 +130,7 @@ patching:
 ---
 
 ## Repository Structure
-
+```
 ├── config/
 │ └── config.py # Model, training, and seed configuration
 ├── notebooks/
@@ -153,6 +153,7 @@ patching:
 │ └── logit_lens_cross_seed_summary.json
 ├── figures/
 └── README.md
+```
 ---
 
 ## Reproducing Results
