@@ -1,252 +1,198 @@
-# GPT-2 Mechanistic Interpretability on SCAN
+# GPT-2 Mechanistic Interpretability of Compositional Generalization Failure
 
-Training a GPT-2 style model on SCAN to mechanistically investigate how transformers fail at compositional generalization using TransformerLens.
+A research repository investigating how and why a small transformer
+model fails at compositional generalization on the SCAN benchmark,
+using mechanistic interpretability tools (logit lens, attention
+analysis, activation patching) to identify the specific failure modes
+and their underlying circuits.
 
 ---
 
 ## Research Question
 
-**Which internal mechanisms cause transformer models to fail at compositional generalization?**
-> Specifically: why do transformer models systematically fail to generate the correct number of repeated actions — a failure pattern observed consistently across all SCAN splits in [T5](https://github.com/suehuynh/scan-compositional-generalization)?
----
+**What causes a minimal transformer to fail at compositional
+generalization on SCAN, and is the dominant failure mode a
+repetition-counting error, or something else?**
 
-## Motivation
-
-T5 exhibits a systematic failure across all SCAN splits: it consistently generates the wrong number of repeated actions, regardless of split difficulty (see [T5 Compositional Analysis Project](https://github.com/suehuynh/scan-compositional-generalization)). This suggests the failure is not about generalization to novel compositions, but about a deeper inability to track and reproduce action repetitions correctly.
-
-Rather than interpreting T5 directly (intractable at scale), we use it as a diagnostic tool — its failure pattern motivates a precise mechanistic question. We train a minimal GPT-2 style model and use TransformerLens to investigate: which internal components are responsible for tracking action repetitions, and why do they fail?
-
-This follows the **model organism methodology**: use a tractable, transparent model to study a phenomenon mechanistically, then reason about what this implies for larger systems.
+Prior self-led project (and some literature) frames transformer failures on
+SCAN as primarily a repetition-counting problem — the model gets the
+right actions but the wrong number of repeats. This project tests
+that assumption directly, using a controlled model organism, before
+building any mechanistic explanation on top of it.
 
 ---
 
-## Approach
+## Key Finding
 
-```
-T5 failure results (Project 2)
-        ↓
-  Motivation & framing
-        ↓
-Train small GPT-2 on SCAN
-  - Succeeds on simple split
-  - Fails on length + addprim splits
-        ↓
-TransformerLens analysis
-  - Logit lens (where does the model commit to wrong token?)
-  - Attention patterns (which heads track compositional structure?)
-  - Activation patching (which layers/heads are causally responsible?)
-        ↓
-Causal intervention
-  - Patch success activations into failure cases
-  - Ablate candidate circuits
-        ↓
-Findings + write-up
-```
+Across all three SCAN splits and five random seeds, the dominant
+failure mode is **not** repetition-counting. Failures decompose as:
+
+| Error Type | Description | Simple | Length | AddPrim |
+|---|---|---|---|---|
+| A1 — Repetition-count | Right actions, right order, wrong count | ~27% | ~29% | ~24% |
+| **B — Semantic substitution** | **Wrong action generated for a clause** | **~69%** | **~68%** | **~72%** |
+| C — Clause omission | Trailing clause dropped entirely | ~3% | ~2% | ~3% |
+| D — Over-generation | Extra trailing tokens beyond target | ~1% | <1% | ~1% |
+
+**Action-substitution errors dominate**, roughly 2.5x more common than
+clean repetition-counting errors, across every split tested. See
+`notebooks/00_error_pattern_analysis.ipynb` for the full
+classification methodology and validation against hand-labeled
+ground truth.
+
+This finding directly shaped the mechanistic analysis in this
+repository: rather than assuming a "repetition-counting circuit" is
+the primary object of study, later notebooks investigate why the
+model's attention correctly identifies task-relevant tokens (modifier
+words like *twice*, *thrice*) while still frequently generating the
+wrong action.
+
 ---
 
 ## Model
 
-Small GPT-2 style transformer trained from scratch:
+A GPT-2 style decoder-only transformer trained from scratch on SCAN's
+simple split:
 
 | Hyperparameter | Value |
-|---------------|-------|
+|---|---|
 | Layers | 2 |
-| Heads | 4 |
-| d_model | 128 |
-| d_mlp | 512 |
-| d_head | 32 |
-| d_vocab | 25 |
-| max_seq_len | 128 |
-| Trained on | Simple split only |
+| Attention heads | 4 |
+| Model dimension | 128 |
+| MLP dimension | 512 |
+| Head dimension | 32 |
+| Vocabulary size | 25 |
+| Context length | 128 |
+| Total parameters | 419,609 |
+
+Trained with AdamW (lr=1e-4, weight decay=1e-2, batch size=32, 10
+epochs) across **5 random seeds** (42, 101, 345, 2834, 10101) for
+cross-seed validation of all mechanistic claims below.
 
 ---
 
-## Results
+## Evaluation
 
-### Evaluation (Seq2Seq Generation)
-
-| Split | Exact Match | Token Accuracy |
-|-------|-------------|----------------|
-| Simple | 33.9% | 85.1% |
-| Length | 32.2% | 86.5% |
-| AddPrim | 38.6% | 86.6% |
-
----
-## Mechanistic Interpretability Findings
-
-### Notebook 01: Logit Lens Analysis
-
-**Question:** Where in the model does the failure happen?
-
-| Split | Early Failure (L1 Dissolution) | Late Failure (L2 Overwrite) | Mean Error Onset |
-|-------|-------------------------------|----------------------------|-----------------|
-| Simple | 61.3% | 38.7% | step 9.19 |
-| Length | 55.3% | 44.7% | step 18.50 |
-| AddPrim | 61.0% | 39.0% | step 9.64 |
-
-**Key Finding:** Two distinct failure modes identified:
-- **Layer 1 Dissolution (~60%):** Failure originates in early layers — 
-  foundational features fail to preserve structural context
-- **Layer 2 Overwrite (~40%):** Layer 1 computes correctly but Layer 2 
-  overwrites with wrong prediction
-- **Length split** shows delayed failure onset (step 18.50) — model 
-  holds on longer before collapsing on longer sequences
+Autoregressive generation (`IN: [command] OUT:` → generated action
+tokens), evaluated by exact sequence match and token-level accuracy.
+See `results/eval_metrics.json` for the exact numbers behind Table 2
+of the accompanying paper.
 
 ---
 
-### Notebook 02: Attention Pattern Analysis
+## Mechanistic Analysis — Notebooks
 
-**Question:** Which heads track modifier tokens ('twice', 'thrice')?
+Findings below are validated across all 3 SCAN splits (simple,
+length, addprim_jump) and all 5 seeds unless noted.
 
-**Modifier Attention Scores (Simple Split):**
+### `00_error_pattern_analysis.ipynb`
+Classifies every failure case into one of four error types (A1/B/C/D
+above) using a grammar-aware, per-clause comparison method. Validated
+against 33 hand-labeled examples (27/33 exact match; remaining 5 are
+documented boundary-ambiguity limitations, see notebook for detail).
+Establishes the empirical premise for all subsequent analysis.
 
-| Head | Success | Failure | Difference |
-|------|---------|---------|------------|
-| L0H0 | 0.0691 | 0.0724 | -0.0033 |
-| L0H1 | 0.0186 | 0.0219 | -0.0033 |
-| L0H2 | 0.0777 | 0.0637 | **+0.0140** |
-| L0H3 | 0.0513 | 0.0540 | -0.0027 |
-| L1H0 | 0.0094 | 0.0086 | -0.0008 |
-| **L1H1** | **0.1150** | **0.1155** | -0.0005 |
-| L1H2 | 0.0072 | 0.0062 | +0.0010 |
-| L1H3 | 0.0318 | 0.0347 | -0.0029 |
+### `01_logit_lens_analysis.ipynb`
+Applies the logit lens during autoregressive generation to localize
+*where* in the network failures originate. Identifies two failure
+modes:
+- **Layer 0 Dissolution** (~55–76% of failures): the correct token
+  never appears at Layer 0's output
+- **Layer 1 Overwrite** (~20–45%): Layer 0 predicts correctly, Layer
+  1 overwrites with the wrong token
 
-**Cross-Split L1H1 Modifier Attention:**
+### `02_attention_patterns.ipynb`
+Analyzes modifier-token attention (*twice*, *thrice*, *around*,
+*after*, *opposite*) across all 8 attention heads. Key findings:
+- **No single head is a fixed "modifier tracker" across random
+  seeds** — the top-attending head varies (an earlier single-seed
+  finding pointing to one specific head did not replicate)
+- Layer 0 attends to modifiers more than Layer 1 in 4 of 5 seeds
+- Modifier attention is **preserved, and often higher, in failure
+  cases** than in success cases — the model is not failing because
+  it ignores relevant tokens
+- L0H0 shows the most consistent failure-associated attention shift
+  across all seeds and splits
 
-| Split | Success | Failure | Difference |
-|-------|---------|---------|------------|
-| Simple | 0.1150 | 0.1155 | -0.0005 |
-| Length | 0.0954 | 0.1129 | -0.0175 |
-| AddPrim | 0.1261 | 0.1169 | +0.0092 |
-
-**Key Findings:**
-- **H1 Confirmed:** L1H1 is the primary modifier-tracking head — 
-  consistently highest modifier attention across all splits
-- **H2 Rejected:** Modifier attention is preserved in failure cases —
-  the model attends to 'twice'/'thrice' equally in success and failure
-- **H3 Partially confirmed:** L1H1 shows diagonal attention pattern 
-  suggesting previous-token tracking for repetition counting
-- **New finding:** L0H2 shows largest attention drop in AddPrim failures 
-  (+0.0226), suggesting primitive-specific structural encoding
-- **New finding:** Length split shows L1H1 attention HIGHER in failures — 
-  model compensates on longer sequences but still fails
-
-**Core insight:** The model correctly SEES modifiers but fails to USE 
-them — failure is downstream of attention.
-
----
-
-### Notebook 03: Activation Patching & MLP Ablation
-
-**Question:** Which downstream MLP circuits fail to translate modifier 
-attention into correct repetition counts?
-
-#### Section 3: L1H1 Ablation
-
-| Split | Baseline | Ablated (L1H1) | Delta | Ablated (L0H2) | Delta |
-|-------|----------|----------------|-------|----------------|-------|
-| Simple | 0.00% | 1.92% | -0.019 | 3.44% | -0.034 |
-| Length | 0.04% | 2.63% | -0.026 | — | — |
-| AddPrim | 0.02% | 1.65% | -0.016 | — | — |
-
-#### Section 4: MLP Activation Patching
-
-| Split | Baseline | L0 Patched | L1 Patched |
-|-------|----------|------------|------------|
-| Simple | 69.76% | 31.97% | 50.29% |
-| Length | 75.05% | 33.12% | 52.26% |
-| AddPrim | 70.28% | 30.68% | 49.83% |
-
-#### Section 5: Recovery Rates
-
-| Split | L0 Recovery | L1 Recovery |
-|-------|-------------|-------------|
-| Simple | 0.1% | 3.1% |
-| Length | 0.0% | 4.3% |
-| AddPrim | 0.1% | 2.8% |
-
-**Key Findings:**
-- **H4 Partially confirmed:** Ablating L1H1 changes behavior 
-  across all splits — negative delta (slight improvement) suggests 
-  L1H1 contributes to structural tracking but is not the sole 
-  repetition-counting circuit. L0H2 shows larger ablation effect.
-- **H5 Rejected:** Patching average success MLP activations 
-  DECREASES token accuracy (~20% drop for L1, ~40% for L0) — 
-  MLP activations are highly context-specific and non-transferable
-- **H6 Partially supported:** L1 MLP consistently more 
-  transferable than L0 MLP across all splits, but neither recovers 
-  failures meaningfully
-- **Core finding:** Failures are localized (70-75% tokens correct) 
-  but MLP activations are too context-specific to patch — the 
-  failure mechanism is distributed rather than localized to one circuit
-
----
-
-## Summary of Hypotheses
-
-| Hypothesis | Status | Key Evidence |
-|------------|--------|--------------|
-| H1: Certain heads attend strongly to modifiers | Confirmed | L1H1 dominant modifier-tracking head across all splits |
-| H2: Layer 2 Overwrite = failed modifier attention | Rejected | Modifier attention preserved in failure cases |
-| H3: Some heads track previous actions | Partial | L1H1 diagonal pattern suggests repetition tracking |
-| H4: Ablating L1H1 increases failure rate | Partial | Changes behavior but negative delta — not primary circuit |
-| H5: L1 MLP patching restores behavior | Rejected | Patching hurts (~20% drop) — activations context-specific |
-| H6: L1 MLP is primary failure circuit | Partial | L1 more transferable than L0 but recovery near-zero |
-
----
-
-## Core Research Finding
-
-> **The model correctly attends to modifier tokens (L1H1, ~70-75% 
-> token accuracy on failure cases) but fails to translate this 
-> attention into correct repetition counts at specific generation 
-> steps. MLP activations are highly context-specific — averaged 
-> success activations corrupt rather than fix failure computations. 
-> The failure mechanism appears distributed across circuits rather 
-> than localized to a single component.**
-
----
-
-## Setup
-
-```bash
-git clone https://github.com/suehuynh/gpt2-mech-interp
-cd gpt2-mech-interp
-pip install -r requirements.txt
-```
-
-**Key dependencies:** `torch`, `transformer_lens`, `datasets`, 
-`wandb`, `matplotlib`, `circuitsvis`, `pandas`, `seaborn`
+### `03_activation_patching.ipynb`
+Tests causal hypotheses via head ablation and MLP activation
+patching:
+- Ablating L0H0 produces a small, consistent effect on failure-case
+  accuracy across all seeds/splits (interpreted as behavioral
+  disruption, not genuine improvement — see notebook discussion)
+- Patching averaged success-case MLP activations into failure cases
+  **decreases** accuracy in every condition tested — MLP
+  computations are highly context-specific and do not transfer via
+  simple averaging
+- L1 MLP patching is consistently less disruptive than L0 MLP
+  patching, suggesting L0 encodes more input-specific computation
 
 ---
 
 ## Repository Structure
-```
-gpt2-mech-interp/
+
 ├── config/
-│   └── config.py              # Model and training configuration
+│ └── config.py # Model, training, and seed configuration
 ├── notebooks/
-│   ├── 01_logit_lens_analysis.ipynb      # Phase 3: Logit lens
-│   ├── 02_attention_patterns.ipynb       # Phase 3: Attention analysis
-│   └── 03_activation_patching.ipynb      # Phase 3: MLP ablation
+│ ├── 00_error_pattern_analysis.ipynb
+│ ├── 01_logit_lens_analysis.ipynb
+│ ├── 02_attention_patterns.ipynb
+│ └── 03_activation_patching.ipynb
 ├── src/
-│   ├── data.py                # SCAN data loading and tokenization
-│   ├── model.py               # GPT-2 implementation from scratch
-│   ├── train.py               # Training pipeline with W&B logging
-│   └── evaluate.py            # Seq2seq evaluation with generation
+│ ├── data.py # SCAN loading and tokenization
+│ ├── model.py # GPT-2 implementation from scratch
+│ ├── train.py # Multi-seed training pipeline
+│ └── evaluate.py # Seq2seq evaluation with generation
 ├── results/
-│   ├── model_final_small.pt   # Trained model weights
-│   ├── small_failure_cases_simple.txt
-│   ├── small_failure_cases_length.txt
-│   └── small_failure_cases_addprim_jump.txt
+│ ├── model_seed{42,101,345,2834,10101}.pt
+| ├── eval_metrics/
+│ ├── failure_cases/
+│ ├── failure_patterns/
+│ ├── ablation/
+| ├── patching/ 
+│ └── logit_lens_cross_seed_summary.json
+├── figures/
 └── README.md
+---
+
+## Reproducing Results
+
+```bash
+pip install -r requirements.txt
+python src/train.py         # trains all 5 seeds (see config.py)
+python src/evaluate.py       # generates results/eval_metrics.json and per-seed failure logs
+jupyter notebook notebooks/00_error_pattern_analysis.ipynb
+jupyter notebook notebooks/01_logit_lens_analysis.ipynb
+jupyter notebook notebooks/02_attention_patterns.ipynb
+jupyter notebook notebooks/03_activation_patching.ipynb
 ```
----
-## Related Work
 
-- **Project 2:** T5 failure analysis on SCAN — [https://github.com/suehuynh/scan-compositional-generalization]
-- Keysers et al. (2019) — Measuring Compositional Generalization
-- Nanda et al. (2023) — Progress measures for grokking via mechanistic interpretability
-- Conmy et al. (2023) — Towards Automated Circuit Discovery for Mechanistic Interpretability
+All model checkpoints for the 5 seeds used in this analysis are
+included in `results/` for exact reproducibility without retraining.
 
 ---
+
+## Limitations
+
+- The grammar-based clause parser (Notebook 00) has one documented
+  edge case: compound "after"-clauses combining "around" and
+  "thrice" modifiers can produce a token-count mismatch
+  (`PARSE_MISMATCH`), empirically rare (0% across all seeds/splits
+  tested here, but not proven to be zero in general — see notebook
+  for detail).
+- MLP activation patching uses averaged activations across success
+  cases; this is a coarse intervention that conflates "MLP
+  computation is context-specific" with "wholesale averaging
+  destroys signal." Position-specific patching is a natural next
+  step (see paper's Future Work).
+- Whole-Layer-0 ablation was tested as a sanity check only; given the
+  model's minimal 2-layer depth, this intervention is too blunt to
+  isolate any specific circuit's causal role (see appendix in
+  accompanying paper).
+
+---
+
+## Experiment Tracking
+
+Training runs logged at:
+[wandb.ai/suehuynh/gpt2-mech-interp](https://wandb.ai/suehuynh/gpt2-mech-interp)
