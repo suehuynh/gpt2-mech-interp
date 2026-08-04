@@ -29,7 +29,7 @@ failure mode is **not** repetition-counting. Failures decompose as:
 
 | Error Type | Description | Simple | Length | AddPrim |
 |---|---|---|---|---|
-| A1 — Repetition-count | Right actions, right order, wrong count | ~27% | ~29% | ~24% |
+| A — Repetition-count | Right actions, right order, wrong count | ~27% | ~29% | ~24% |
 | **B — Semantic substitution** | **Wrong action generated for a clause** | **~69%** | **~68%** | **~72%** |
 | C — Clause omission | Trailing clause dropped entirely | ~3% | ~2% | ~3% |
 | D — Over-generation | Extra trailing tokens beyond target | ~1% | <1% | ~1% |
@@ -86,7 +86,7 @@ Findings below are validated across all 3 SCAN splits (simple,
 length, addprim_jump) and all 5 seeds unless noted.
 
 ### `00_error_pattern_analysis.ipynb`
-Classifies every failure case into one of four error types (A1/B/C/D
+Classifies every failure case into one of four error types (A/B/C/D
 above) using a grammar-aware, per-clause comparison method. Validated
 against 33 hand-labeled examples (27/33 exact match; remaining 5 are
 documented boundary-ambiguity limitations, see notebook for detail).
