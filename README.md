@@ -8,6 +8,21 @@ and their underlying circuits.
 
 ---
 
+**Abstract.** A minimal transformer trained on SCAN fails predominantly through semantic
+action substitution, not repetition miscounting, the assumption this line of work often
+starts from. The model's attention correctly identifies the modifier tokens relevant to
+avoiding these failures, and does so at least as strongly in failure cases as in success
+cases, yet no single tested intervention, head ablation or MLP activation patching,
+restores correct behavior. Validated across three SCAN splits and five independently
+trained seeds, these results indicate the failure is neither a retrieval problem nor
+attributable to a single circuit.
+
+📄 **Full write-up:** [Paper (Google Drive)](https://drive.google.com/file/d/1wChfmvwN-EkWDqjVe6DuJVpCH-PfalK7/view?usp=sharing)
+Written up as a paper submitted to the NewInML Workshop @ NeurIPS 2026 (non-archival,
+decision pending).
+
+---
+
 ## Research Question
 
 **What causes a minimal transformer to fail at compositional
@@ -19,6 +34,22 @@ SCAN as primarily a repetition-counting problem — the model gets the
 right actions but the wrong number of repeats. This project tests
 that assumption directly, using a controlled model organism, before
 building any mechanistic explanation on top of it.
+
+---
+
+## Contributions
+
+- A **validated, grammar-aware error taxonomy** showing that semantic substitution errors
+  dominate over repetition-counting errors, roughly two to three times as common across
+  every split and seed tested.
+- Cross-seed evidence that **single-head circuit claims in small transformers can be
+  fragile**: a head identified as the primary modifier-tracking circuit in one training run
+  does not replicate as such across four additional independently seeded runs.
+- A **null result on attention magnitude as a causal signal**: the head most consistently
+  associated with failure under ablation is not the head with the highest attention score.
+- A **null result on coarse activation patching**: substituting averaged success-case MLP
+  activations into failure cases decreases accuracy in every condition tested, rather than
+  restoring it.
 
 ---
 
@@ -175,21 +206,27 @@ included in `results/` for exact reproducibility without retraining.
 
 ## Limitations
 
-- The grammar-based clause parser (Notebook 00) has one documented
-  edge case: compound "after"-clauses combining "around" and
-  "thrice" modifiers can produce a token-count mismatch
-  (`PARSE_MISMATCH`), empirically rare (0% across all seeds/splits
-  tested here, but not proven to be zero in general — see notebook
-  for detail).
-- MLP activation patching uses averaged activations across success
-  cases; this is a coarse intervention that conflates "MLP
-  computation is context-specific" with "wholesale averaging
-  destroys signal." Position-specific patching is a natural next
-  step (see paper's Future Work).
-- Whole-Layer-0 ablation was tested as a sanity check only; given the
-  model's minimal 2-layer depth, this intervention is too blunt to
-  isolate any specific circuit's causal role (see appendix in
-  accompanying paper).
+- This model organism is a minimal, from-scratch transformer trained specifically to
+exhibit compositional generalization failure on SCAN. No claim is made that its internal
+computation corresponds to the failure mechanisms of any larger or differently trained
+model.
+
+- No single attention head's association with the target behavior replicates as a fixed
+circuit across seeds; an initial single-seed analysis identified one head as the primary
+modifier-tracking circuit, and this claim did not hold once checked against four
+additional independently seeded models. This is treated as a central result of the
+project, not a caveat to a different result, and it motivates the cross-seed validation
+applied throughout.
+
+- The MLP activation patching intervention substitutes a single activation, averaged across
+all verified success cases and an entire sequence, into a failure case's forward pass.
+This conflates whether the relevant computation is transferable at all with whether a
+single averaged representation can stand in for it; the reported result speaks only to the
+latter. Position-specific patching, restricted to the token positions where a substitution
+error occurs, is a natural next step.
+
+- Only single-head ablation and whole-layer MLP patching are tested. Neither restores
+correct behavior, but this does not establish that no finer-grained intervention would.
 
 ---
 
